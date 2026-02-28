@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, Platform, RefreshControl,
   Pressable, Modal, TouchableOpacity, FlatList,
@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { useTheme } from '@/lib/theme-context';
+import { apiRequest } from '@/lib/query-client';
 import type { ReportData, Transaction } from '@/lib/types';
 
 // ─── helpers ────────────────────────────────────────────────────────────────
@@ -277,15 +278,26 @@ export default function ReportsScreen() {
   const insets = useSafeAreaInsets();
   const [showAllTx, setShowAllTx] = useState(false);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
+  const [selectedFilter, setSelectedFilter] = useState<'today' | '7days' | '30days' | 'all'>('all');
+  const reportsQuery = useQuery<ReportData>({
+    queryKey: [`/api/reports?filter=${selectedFilter}`],
+  });
 
-  const reportsQuery = useQuery<ReportData>({ queryKey: ['/api/reports'] });
-  const txQuery = useQuery<Transaction[]>({ queryKey: ['/api/transactions'] });
+  const txQuery = useQuery<Transaction[]>({
+    queryKey: [`/api/transactions${selectedFilter !== 'all' ? `?filter=${selectedFilter}` : ''}`]
+  });
   const report = reportsQuery.data;
   const transactions = txQuery.data || [];
 
-  const recentTx = [...transactions]
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    .slice(0, 5);
+  const recentTx = useMemo(() => {
+    return [...transactions]
+      .sort((a, b) => {
+        const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return db - da;
+      })
+      .slice(0, 5);
+  }, [transactions]);
 
   const onRefresh = () => { reportsQuery.refetch(); txQuery.refetch(); };
 
@@ -314,11 +326,47 @@ export default function ReportsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.headerRow}>
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={[styles.headerTitle, { color: colors.text, fontFamily: 'Inter_700Bold' }]}>Reports & Analytics</Text>
             <Text style={[styles.headerSub, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>Business intelligence overview</Text>
           </View>
         </View>
+
+        <View style={styles.filterContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterScroll}>
+            {[
+              { label: 'All Time', value: 'all' },
+              { label: 'Today', value: 'today' },
+              { label: 'Last 7 Days', value: '7days' },
+              { label: 'Last 30 Days', value: '30days' },
+            ].map((f) => (
+              <Pressable
+                key={f.value}
+                onPress={() => setSelectedFilter(f.value as any)}
+                style={[
+                  styles.filterTab,
+                  {
+                    backgroundColor: selectedFilter === f.value ? colors.tint : colors.card,
+                    borderColor: selectedFilter === f.value ? colors.tint : colors.border,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.filterText,
+                    {
+                      color: selectedFilter === f.value ? '#fff' : colors.text,
+                      fontFamily: selectedFilter === f.value ? 'Inter_600SemiBold' : 'Inter_400Regular',
+                    },
+                  ]}
+                >
+                  {f.label}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+
 
         {/* Stat Cards */}
         <View style={styles.statGrid}>
@@ -471,7 +519,7 @@ export default function ReportsScreen() {
             </Pressable>
           </View>
 
-          {recentTx.map(tx => (
+          {recentTx.map((tx: Transaction) => (
             <Pressable
               key={tx.id}
               onPress={() => setSelectedTx(tx)}
@@ -604,6 +652,10 @@ const styles = StyleSheet.create({
   txInvoice: { fontSize: 13 },
   txTime: { fontSize: 11, marginTop: 2 },
   txTotal: { fontSize: 14 },
+  filterContainer: { marginBottom: 16 },
+  filterScroll: { paddingHorizontal: 20, gap: 8 },
+  filterTab: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  filterText: { fontSize: 12 },
 });
 
 // ─── Detail Sheet Styles ─────────────────────────────────────────────────────

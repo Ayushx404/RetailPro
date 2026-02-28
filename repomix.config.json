@@ -1,0 +1,47 @@
+{
+    "output": {
+        "filePath": "repomix-output.md",
+        "style": "markdown",
+        "removeComments": false,
+        "removeEmptyLines": false,
+        "topFilesLength": 5,
+        "showLineNumbers": false,
+        "copyToClipboard": false,
+        "headerText": "Repomix aggregated codebase for Retail-Pro"
+    },
+    "include": [
+        "app/**/*",
+        "components/**/*",
+        "constants/**/*",
+        "lib/**/*",
+        "server/**/*",
+        "shared/**/*",
+        "scripts/**/*",
+        "*.json",
+        "*.js",
+        "*.ts",
+        "*.tsx"
+    ],
+    "ignore": {
+        "customPatterns": [
+            "**/node_modules/**",
+            "**/.git/**",
+            "**/.expo/**",
+            "**/.local/**",
+            "**/.config/**",
+            "**/assets/**",
+            "**/attached_assets/**",
+            "**/server_dist/**",
+            "server/serviceAccountKey.json",
+            "package-lock.json",
+            ".env",
+            ".env.*",
+            "repomix-output.md"
+        ],
+        "useGitignore": true,
+        "useDefaultPatterns": true
+    },
+    "security": {
+        "enableSecurityCheck": true
+    }
+}

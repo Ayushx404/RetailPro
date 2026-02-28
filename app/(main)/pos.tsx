@@ -70,8 +70,12 @@ export default function POSScreen() {
 
   const subtotal = cart.reduce((s, c) => s + c.product.sellingPrice * c.qty, 0);
   const gstAmount = cart.reduce((s, c) => s + (c.product.sellingPrice * c.qty * c.product.gstRate / 100), 0);
-  const discountAmount = Number(discount) || 0;
-  const total = subtotal - discountAmount + gstAmount;
+
+  const maxDiscount = subtotal * 0.03;
+  const rawDiscount = Number(discount) || 0;
+  const discountAmount = Math.min(rawDiscount, maxDiscount);
+
+  const total = Math.max(0, subtotal - discountAmount + gstAmount);
 
   const checkoutMutation = useMutation({
     mutationFn: async () => {
@@ -228,14 +232,27 @@ export default function POSScreen() {
                 <View style={styles.summaryRow}>
                   <Text style={[styles.summaryLabel, { color: colors.warning, fontFamily: 'Inter_500Medium' }]}>Discount</Text>
                   <TextInput
-                    style={[styles.discountInput, { color: colors.warning, borderColor: colors.border, fontFamily: 'Inter_500Medium' }]}
+                    style={[styles.discountInput, {
+                      color: rawDiscount > maxDiscount ? colors.danger : colors.warning,
+                      borderColor: rawDiscount > maxDiscount ? colors.danger : colors.border,
+                      fontFamily: 'Inter_500Medium'
+                    }]}
                     placeholder="0"
                     placeholderTextColor={colors.textMuted}
                     value={discount}
-                    onChangeText={setDiscount}
+                    onChangeText={v => {
+                      if (/^\d*\.?\d*$/.test(v)) {
+                        setDiscount(v);
+                      }
+                    }}
                     keyboardType="numeric"
                   />
                 </View>
+                {rawDiscount > maxDiscount && (
+                  <Text style={{ color: colors.danger, fontSize: 10, textAlign: 'right', marginTop: -4, marginBottom: 4 }}>
+                    Max allowed discount (3%): Rs.{maxDiscount.toFixed(2)}
+                  </Text>
+                )}
                 <View style={styles.summaryRow}>
                   <Text style={[styles.summaryLabel, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>GST/Tax</Text>
                   <Text style={[styles.summaryValue, { color: colors.success, fontFamily: 'Inter_500Medium' }]}>+Rs.{gstAmount.toFixed(2)}</Text>

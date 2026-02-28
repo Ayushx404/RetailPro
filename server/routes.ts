@@ -190,8 +190,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.updateStock(product.id, -item.qty);
     }
 
-    const discountAmount = Number(discount) || 0;
-    const totalAmount = subtotal - discountAmount + gstAmount;
+    const maxAllowedDiscount = subtotal * 0.03;
+    const discountAmount = Math.min(Number(discount) || 0, maxAllowedDiscount);
+    const totalAmount = Math.max(0, subtotal - discountAmount + gstAmount);
     const invoiceNo = `INV-${new Date().getFullYear()}-${String((await storage.getTransactions()).length + 1).padStart(4, "0")}`;
 
     const tx = await storage.createTransaction({
@@ -211,12 +212,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(201).json(tx);
   });
 
-  app.get("/api/transactions", async (_req: Request, res: Response) => {
-    res.json(await storage.getTransactions());
+  app.get("/api/transactions", async (req: Request, res: Response) => {
+    let transactions = await storage.getTransactions();
+    const filter = req.query.filter as string;
+    if (filter && filter !== 'all') {
+      const now = new Date();
+      if (filter === 'today') {
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        transactions = transactions.filter(t => t.createdAt && new Date(t.createdAt).getTime() >= startOfDay);
+      } else if (filter === '7days') {
+        const sevenDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7).getTime();
+        transactions = transactions.filter(t => t.createdAt && new Date(t.createdAt).getTime() >= sevenDaysAgo);
+      } else if (filter === '30days') {
+        const thirtyDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30).getTime();
+        transactions = transactions.filter(t => t.createdAt && new Date(t.createdAt).getTime() >= thirtyDaysAgo);
+      }
+    }
+    res.json(transactions);
   });
 
   app.get("/api/transactions/:id", async (req: Request, res: Response) => {
-    const tx = await storage.getTransaction(req.params.id);
+    const tx = await storage.getTransaction(req.params.id as string);
     if (!tx) return res.status(404).json({ error: "Transaction not found" });
     res.json(tx);
   });
@@ -316,10 +332,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  app.get("/api/reports", async (_req: Request, res: Response) => {
-    const transactions = await storage.getTransactions();
+  app.get("/api/reports", async (req: Request, res: Response) => {
+    let transactions = await storage.getTransactions();
     const products = await storage.getProducts();
     // const users = await storage.getUsers();
+
+    const filter = req.query.filter as string;
+    if (filter && filter !== 'all') {
+      const now = new Date();
+      if (filter === 'today') {
+        const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        transactions = transactions.filter(t => t.createdAt && new Date(t.createdAt).getTime() >= startOfDay);
+      } else if (filter === '7days') {
+        const sevenDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7).getTime();
+        transactions = transactions.filter(t => t.createdAt && new Date(t.createdAt).getTime() >= sevenDaysAgo);
+      } else if (filter === '30days') {
+        const thirtyDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30).getTime();
+        transactions = transactions.filter(t => t.createdAt && new Date(t.createdAt).getTime() >= thirtyDaysAgo);
+      }
+    }
 
     const totalRevenue = transactions.reduce((s, t) => s + t.total, 0);
     const productMap = new Map(products.map(p => [p.id, p]));

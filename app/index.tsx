@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, TextInput, Pressable, StyleSheet, Platform,
-  KeyboardAvoidingView, ScrollView, Animated, Dimensions,
+  ScrollView, Animated, Dimensions,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,7 +16,7 @@ const { width } = Dimensions.get('window');
 
 export default function LoginScreen() {
   const { colors, isDark } = useTheme();
-  const { setUser } = useAuth();
+  const { user, setUser, isLoaded } = useAuth();
   const insets = useSafeAreaInsets();
   const [tab, setTab] = useState<'email' | 'pin'>('email');
   const [email, setEmail] = useState('');
@@ -34,6 +34,12 @@ export default function LoginScreen() {
     if (role === 'STOCK_CLERK') return '/(main)/pos';
     return '/(main)/dashboard'; // ADMIN
   };
+
+  useEffect(() => {
+    if (isLoaded && user) {
+      router.replace(getHomeRoute(user.role) as any);
+    }
+  }, [isLoaded, user]);
 
   useEffect(() => {
     Animated.parallel([
@@ -76,151 +82,146 @@ export default function LoginScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
+      <ScrollView
+        contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 20), paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 20) }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          contentContainerStyle={[styles.scrollContent, { paddingTop: insets.top + (Platform.OS === 'web' ? 67 : 20), paddingBottom: insets.bottom + (Platform.OS === 'web' ? 34 : 20) }]}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <Animated.View style={[styles.header, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
-            <View style={[styles.logoContainer, { backgroundColor: colors.tint + '20' }]}>
-              <MaterialCommunityIcons name="store" size={48} color={colors.tint} />
-            </View>
-            <Text style={[styles.appName, { color: colors.text, fontFamily: 'Inter_700Bold' }]}>RetailPro</Text>
-            <Text style={[styles.subtitle, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>Inventory & Billing System</Text>
-          </Animated.View>
-
-          <View style={[styles.tabRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Pressable
-              onPress={() => { setTab('email'); setError(''); }}
-              style={[styles.tabBtn, tab === 'email' && { backgroundColor: colors.tint }]}
-            >
-              <Ionicons name="mail-outline" size={16} color={tab === 'email' ? '#fff' : colors.textSecondary} />
-              <Text style={[styles.tabText, { color: tab === 'email' ? '#fff' : colors.textSecondary, fontFamily: 'Inter_600SemiBold' }]}>Admin / Email</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => { setTab('pin'); setError(''); }}
-              style={[styles.tabBtn, tab === 'pin' && { backgroundColor: colors.tint }]}
-            >
-              <Ionicons name="keypad-outline" size={16} color={tab === 'pin' ? '#fff' : colors.textSecondary} />
-              <Text style={[styles.tabText, { color: tab === 'pin' ? '#fff' : colors.textSecondary, fontFamily: 'Inter_600SemiBold' }]}>Quick PIN</Text>
-            </Pressable>
+        <Animated.View style={[styles.header, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+          <View style={[styles.logoContainer, { backgroundColor: colors.tint + '20' }]}>
+            <MaterialCommunityIcons name="store" size={48} color={colors.tint} />
           </View>
+          <Text style={[styles.appName, { color: colors.text, fontFamily: 'Inter_700Bold' }]}>RetailPro</Text>
+          <Text style={[styles.subtitle, { color: colors.textSecondary, fontFamily: 'Inter_400Regular' }]}>Inventory & Billing System</Text>
+        </Animated.View>
 
-          <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            {tab === 'email' ? (
-              <>
-                <Text style={[styles.label, { color: colors.textSecondary, fontFamily: 'Inter_500Medium' }]}>Email Address</Text>
-                <View style={[styles.inputRow, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
-                  <Ionicons name="mail-outline" size={20} color={colors.textMuted} />
-                  <TextInput
-                    style={[styles.input, { color: colors.text, fontFamily: 'Inter_400Regular' }]}
-                    placeholder="Enter your email"
-                    placeholderTextColor={colors.textMuted}
-                    value={email}
-                    onChangeText={setEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                  />
-                </View>
+        <View style={[styles.tabRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Pressable
+            onPress={() => { setTab('email'); setError(''); }}
+            style={[styles.tabBtn, tab === 'email' && { backgroundColor: colors.tint }]}
+          >
+            <Ionicons name="mail-outline" size={16} color={tab === 'email' ? '#fff' : colors.textSecondary} />
+            <Text style={[styles.tabText, { color: tab === 'email' ? '#fff' : colors.textSecondary, fontFamily: 'Inter_600SemiBold' }]}>Admin / Email</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => { setTab('pin'); setError(''); }}
+            style={[styles.tabBtn, tab === 'pin' && { backgroundColor: colors.tint }]}
+          >
+            <Ionicons name="keypad-outline" size={16} color={tab === 'pin' ? '#fff' : colors.textSecondary} />
+            <Text style={[styles.tabText, { color: tab === 'pin' ? '#fff' : colors.textSecondary, fontFamily: 'Inter_600SemiBold' }]}>Quick PIN</Text>
+          </Pressable>
+        </View>
 
-                <Text style={[styles.label, { color: colors.textSecondary, fontFamily: 'Inter_500Medium', marginTop: 16 }]}>Password</Text>
-                <View style={[styles.inputRow, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
-                  <Ionicons name="lock-closed-outline" size={20} color={colors.textMuted} />
-                  <TextInput
-                    style={[styles.input, { color: colors.text, fontFamily: 'Inter_400Regular' }]}
-                    placeholder="Enter your password"
-                    placeholderTextColor={colors.textMuted}
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry={!showPassword}
-                  />
-                  <Pressable onPress={() => setShowPassword(!showPassword)}>
-                    <Ionicons name={showPassword ? "eye-outline" : "eye-off-outline"} size={20} color={colors.textMuted} />
+        <View style={[styles.formCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {tab === 'email' ? (
+            <>
+              <Text style={[styles.label, { color: colors.textSecondary, fontFamily: 'Inter_500Medium' }]}>Email Address</Text>
+              <View style={[styles.inputRow, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+                <Ionicons name="mail-outline" size={20} color={colors.textMuted} />
+                <TextInput
+                  style={[styles.input, { color: colors.text, fontFamily: 'Inter_400Regular' }]}
+                  placeholder="Enter your email"
+                  placeholderTextColor={colors.textMuted}
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              <Text style={[styles.label, { color: colors.textSecondary, fontFamily: 'Inter_500Medium', marginTop: 16 }]}>Password</Text>
+              <View style={[styles.inputRow, { backgroundColor: colors.inputBg, borderColor: colors.border }]}>
+                <Ionicons name="lock-closed-outline" size={20} color={colors.textMuted} />
+                <TextInput
+                  style={[styles.input, { color: colors.text, fontFamily: 'Inter_400Regular' }]}
+                  placeholder="Enter your password"
+                  placeholderTextColor={colors.textMuted}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                />
+                <Pressable onPress={() => setShowPassword(!showPassword)}>
+                  <Ionicons name={showPassword ? "eye-outline" : "eye-off-outline"} size={20} color={colors.textMuted} />
+                </Pressable>
+              </View>
+
+              <Pressable
+                onPress={handleEmailLogin}
+                disabled={loading}
+                style={({ pressed }) => [styles.loginBtn, { backgroundColor: colors.tint, opacity: pressed || loading ? 0.7 : 1 }]}
+              >
+                <Ionicons name="log-in-outline" size={22} color="#fff" />
+                <Text style={[styles.loginBtnText, { fontFamily: 'Inter_600SemiBold' }]}>{loading ? 'Logging in...' : 'Login'}</Text>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <Text style={[styles.pinTitle, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>Enter 4-Digit PIN</Text>
+              <View style={styles.pinDotsRow}>
+                {[0, 1, 2, 3].map(i => (
+                  <View key={i} style={[styles.pinDot, { borderColor: colors.border, backgroundColor: pin.length > i ? colors.tint : 'transparent' }]} />
+                ))}
+              </View>
+              <View style={styles.pinPad}>
+                {pinDigits.map((d, i) => (
+                  <Pressable
+                    key={i}
+                    onPress={() => {
+                      if (d === 'del') { setPin(prev => prev.slice(0, -1)); }
+                      else if (d && pin.length < 4) { setPin(prev => prev + d); if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }
+                    }}
+                    style={({ pressed }) => [styles.pinKey, { backgroundColor: d ? (pressed ? colors.tint + '30' : colors.inputBg) : 'transparent', borderColor: d ? colors.border : 'transparent' }]}
+                    disabled={!d}
+                  >
+                    {d === 'del' ? (
+                      <Ionicons name="backspace-outline" size={24} color={colors.text} />
+                    ) : (
+                      <Text style={[styles.pinKeyText, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>{d}</Text>
+                    )}
                   </Pressable>
-                </View>
-
-                <Pressable
-                  onPress={handleEmailLogin}
-                  disabled={loading}
-                  style={({ pressed }) => [styles.loginBtn, { backgroundColor: colors.tint, opacity: pressed || loading ? 0.7 : 1 }]}
-                >
-                  <Ionicons name="log-in-outline" size={22} color="#fff" />
-                  <Text style={[styles.loginBtnText, { fontFamily: 'Inter_600SemiBold' }]}>{loading ? 'Logging in...' : 'Login'}</Text>
-                </Pressable>
-              </>
-            ) : (
-              <>
-                <Text style={[styles.pinTitle, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>Enter 4-Digit PIN</Text>
-                <View style={styles.pinDotsRow}>
-                  {[0, 1, 2, 3].map(i => (
-                    <View key={i} style={[styles.pinDot, { borderColor: colors.border, backgroundColor: pin.length > i ? colors.tint : 'transparent' }]} />
-                  ))}
-                </View>
-                <View style={styles.pinPad}>
-                  {pinDigits.map((d, i) => (
-                    <Pressable
-                      key={i}
-                      onPress={() => {
-                        if (d === 'del') { setPin(prev => prev.slice(0, -1)); }
-                        else if (d && pin.length < 4) { setPin(prev => prev + d); if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); }
-                      }}
-                      style={({ pressed }) => [styles.pinKey, { backgroundColor: d ? (pressed ? colors.tint + '30' : colors.inputBg) : 'transparent', borderColor: d ? colors.border : 'transparent' }]}
-                      disabled={!d}
-                    >
-                      {d === 'del' ? (
-                        <Ionicons name="backspace-outline" size={24} color={colors.text} />
-                      ) : (
-                        <Text style={[styles.pinKeyText, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>{d}</Text>
-                      )}
-                    </Pressable>
-                  ))}
-                </View>
-                <Pressable
-                  onPress={handlePinLogin}
-                  disabled={loading || pin.length !== 4}
-                  style={({ pressed }) => [styles.loginBtn, { backgroundColor: colors.tint, opacity: pressed || loading || pin.length !== 4 ? 0.5 : 1 }]}
-                >
-                  <Ionicons name="log-in-outline" size={22} color="#fff" />
-                  <Text style={[styles.loginBtnText, { fontFamily: 'Inter_600SemiBold' }]}>{loading ? 'Logging in...' : 'Login'}</Text>
-                </Pressable>
-              </>
-            )}
-
-            {!!error && (
-              <View style={[styles.errorBox, { backgroundColor: colors.danger + '15' }]}>
-                <Ionicons name="alert-circle" size={18} color={colors.danger} />
-                <Text style={[styles.errorText, { color: colors.danger, fontFamily: 'Inter_500Medium' }]}>{error}</Text>
+                ))}
               </View>
-            )}
+              <Pressable
+                onPress={handlePinLogin}
+                disabled={loading || pin.length !== 4}
+                style={({ pressed }) => [styles.loginBtn, { backgroundColor: colors.tint, opacity: pressed || loading || pin.length !== 4 ? 0.5 : 1 }]}
+              >
+                <Ionicons name="log-in-outline" size={22} color="#fff" />
+                <Text style={[styles.loginBtnText, { fontFamily: 'Inter_600SemiBold' }]}>{loading ? 'Logging in...' : 'Login'}</Text>
+              </Pressable>
+            </>
+          )}
+
+          {!!error && (
+            <View style={[styles.errorBox, { backgroundColor: colors.danger + '15' }]}>
+              <Ionicons name="alert-circle" size={18} color={colors.danger} />
+              <Text style={[styles.errorText, { color: colors.danger, fontFamily: 'Inter_500Medium' }]}>{error}</Text>
+            </View>
+          )}
+        </View>
+
+        <View style={[styles.demoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={styles.demoHeader}>
+            <Ionicons name="information-circle-outline" size={18} color={colors.tint} />
+            <Text style={[styles.demoTitle, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>Demo Credentials</Text>
           </View>
-
-          <View style={[styles.demoCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.demoHeader}>
-              <Ionicons name="information-circle-outline" size={18} color={colors.tint} />
-              <Text style={[styles.demoTitle, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>Demo Credentials</Text>
-            </View>
-            <View style={styles.demoRow}>
-              <View style={[styles.demoBadge, { backgroundColor: colors.admin + '20' }]}>
-                <Text style={[styles.demoBadgeText, { color: colors.admin, fontFamily: 'Inter_600SemiBold' }]}>ADMIN</Text>
-              </View>
-            </View>
-            <View style={styles.demoRow}>
-              <View style={[styles.demoBadge, { backgroundColor: colors.cashier + '20' }]}>
-                <Text style={[styles.demoBadgeText, { color: colors.cashier, fontFamily: 'Inter_600SemiBold' }]}>CASHIER</Text>
-              </View>
-            </View>
-            <View style={styles.demoRow}>
-              <View style={[styles.demoBadge, { backgroundColor: colors.stockClerk + '20' }]}>
-                <Text style={[styles.demoBadgeText, { color: colors.stockClerk, fontFamily: 'Inter_600SemiBold' }]}>STOCK_CLERK</Text>
-              </View>
+          <View style={styles.demoRow}>
+            <View style={[styles.demoBadge, { backgroundColor: colors.admin + '20' }]}>
+              <Text style={[styles.demoBadgeText, { color: colors.admin, fontFamily: 'Inter_600SemiBold' }]}>ADMIN</Text>
             </View>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+          <View style={styles.demoRow}>
+            <View style={[styles.demoBadge, { backgroundColor: colors.cashier + '20' }]}>
+              <Text style={[styles.demoBadgeText, { color: colors.cashier, fontFamily: 'Inter_600SemiBold' }]}>CASHIER</Text>
+            </View>
+          </View>
+          <View style={styles.demoRow}>
+            <View style={[styles.demoBadge, { backgroundColor: colors.stockClerk + '20' }]}>
+              <Text style={[styles.demoBadgeText, { color: colors.stockClerk, fontFamily: 'Inter_600SemiBold' }]}>STOCK_CLERK</Text>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
     </View>
   );
 }

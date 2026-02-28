@@ -1,5 +1,5 @@
 import React from 'react';
-import { Tabs } from 'expo-router';
+import { Tabs, Redirect } from 'expo-router';
 import { Platform, StyleSheet, View } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -8,9 +8,12 @@ import { useAuth } from '@/lib/auth-context';
 
 export default function MainLayout() {
   const { colors, isDark } = useTheme();
-  const { user } = useAuth();
+  const { user, isLoaded } = useAuth();
   const isWeb = Platform.OS === 'web';
   const isIOS = Platform.OS === 'ios';
+
+  if (!isLoaded) return null;
+  if (!user) return <Redirect href="/" />;
 
   const isAdmin = user?.role === 'ADMIN';
   const isCashier = user?.role === 'CASHIER';

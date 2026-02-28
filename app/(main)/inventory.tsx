@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, Pressable, Platform,
-  TextInput, FlatList, Modal, Alert, Animated,
+  TextInput, FlatList, Modal, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -11,166 +11,8 @@ import { useTheme } from '@/lib/theme-context';
 import { apiRequest, queryClient } from '@/lib/query-client';
 import type { Product } from '@/lib/types';
 
-const CATEGORIES = ['All', 'Groceries', 'Dairy', 'Household', 'Personal Care', 'Beverages', 'Snacks', 'Frozen Foods'];
-const STOCK_FILTERS = ['All Stock', 'Low Stock', 'Out of Stock', 'In Stock'];
-
-const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-const DAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
-
-// Parses 'YYYY-MM-DD' safely
-function parseLocalDate(str: string): Date | null {
-  if (!str || !/^\d{4}-\d{2}-\d{2}$/.test(str)) return null;
-  const [y, m, d] = str.split('-').map(Number);
-  return new Date(y, m - 1, d);
-}
-
-function formatDateStr(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-interface DatePickerFieldProps {
-  label: string;
-  value: string; // 'YYYY-MM-DD' or ''
-  onChange: (val: string) => void;
-  colors: any;
-}
-
-function DatePickerField({ label, value, onChange, colors }: DatePickerFieldProps) {
-  const [open, setOpen] = useState(false);
-  const parsed = parseLocalDate(value);
-  const today = new Date();
-
-  const [viewYear, setViewYear] = useState(parsed ? parsed.getFullYear() : today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(parsed ? parsed.getMonth() : today.getMonth());
-
-  const openCalendar = useCallback(() => {
-    const d = parseLocalDate(value);
-    if (d) { setViewYear(d.getFullYear()); setViewMonth(d.getMonth()); }
-    else { setViewYear(today.getFullYear()); setViewMonth(today.getMonth()); }
-    setOpen(true);
-  }, [value]);
-
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-  const firstWeekday = new Date(viewYear, viewMonth, 1).getDay();
-  const cells: (number | null)[] = [
-    ...Array(firstWeekday).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ];
-  // Pad to full rows
-  while (cells.length % 7 !== 0) cells.push(null);
-
-  const prevMonth = () => {
-    if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
-    else setViewMonth(m => m - 1);
-  };
-  const nextMonth = () => {
-    if (viewMonth === 11) { setViewMonth(0); setViewYear(y => y + 1); }
-    else setViewMonth(m => m + 1);
-  };
-
-  const selectDay = (day: number) => {
-    const selected = new Date(viewYear, viewMonth, day);
-    onChange(formatDateStr(selected));
-    setOpen(false);
-  };
-
-  const isSelected = (day: number) => {
-    if (!parsed) return false;
-    return parsed.getFullYear() === viewYear && parsed.getMonth() === viewMonth && parsed.getDate() === day;
-  };
-
-  const isToday = (day: number) =>
-    today.getFullYear() === viewYear && today.getMonth() === viewMonth && today.getDate() === day;
-
-  const displayValue = parsed
-    ? `${String(parsed.getDate()).padStart(2, '0')} ${MONTH_NAMES[parsed.getMonth()].slice(0, 3)} ${parsed.getFullYear()}`
-    : 'Select date';
-
-  return (
-    <View style={{ marginBottom: 0 }}>
-      <Pressable
-        onPress={openCalendar}
-        style={[calStyles.dateBtn, { borderColor: colors.border, backgroundColor: colors.inputBg }]}
-      >
-        <Ionicons name="calendar-outline" size={16} color={parsed ? colors.tint : colors.textMuted} />
-        <Text style={[calStyles.dateBtnText, { color: parsed ? colors.text : colors.textMuted }]}>
-          {displayValue}
-        </Text>
-        {parsed && (
-          <Pressable onPress={() => { onChange(''); }} hitSlop={8}>
-            <Ionicons name="close-circle" size={15} color={colors.textMuted} />
-          </Pressable>
-        )}
-      </Pressable>
-
-      <Modal visible={open} transparent animationType="fade">
-        <Pressable style={calStyles.calOverlay} onPress={() => setOpen(false)}>
-          <Pressable
-            onPress={e => e.stopPropagation()}
-            style={[calStyles.calCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-          >
-            {/* Month navigation */}
-            <View style={calStyles.calHeader}>
-              <Pressable onPress={prevMonth} style={calStyles.calNavBtn}>
-                <Ionicons name="chevron-back" size={20} color={colors.text} />
-              </Pressable>
-              <Text style={[calStyles.calMonthLabel, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>
-                {MONTH_NAMES[viewMonth]} {viewYear}
-              </Text>
-              <Pressable onPress={nextMonth} style={calStyles.calNavBtn}>
-                <Ionicons name="chevron-forward" size={20} color={colors.text} />
-              </Pressable>
-            </View>
-
-            {/* Day labels */}
-            <View style={calStyles.calDayRow}>
-              {DAY_LABELS.map(d => (
-                <Text key={d} style={[calStyles.calDayLabel, { color: colors.textMuted, fontFamily: 'Inter_500Medium' }]}>{d}</Text>
-              ))}
-            </View>
-
-            {/* Day grid */}
-            <View style={calStyles.calGrid}>
-              {cells.map((day, idx) => (
-                <View key={idx} style={calStyles.calCell}>
-                  {day !== null && (
-                    <Pressable
-                      onPress={() => selectDay(day)}
-                      style={[
-                        calStyles.calDayBtn,
-                        isSelected(day) && { backgroundColor: colors.tint },
-                        !isSelected(day) && isToday(day) && { borderWidth: 1.5, borderColor: colors.tint },
-                      ]}
-                    >
-                      <Text style={[
-                        calStyles.calDayText,
-                        { color: isSelected(day) ? '#fff' : isToday(day) ? colors.tint : colors.text },
-                        { fontFamily: isSelected(day) ? 'Inter_700Bold' : 'Inter_400Regular' },
-                      ]}>
-                        {day}
-                      </Text>
-                    </Pressable>
-                  )}
-                </View>
-              ))}
-            </View>
-
-            {/* Footer */}
-            <Pressable
-              onPress={() => setOpen(false)}
-              style={[calStyles.calCloseBtn, { borderTopColor: colors.border }]}
-            >
-              <Text style={[calStyles.calCloseBtnText, { color: colors.textSecondary, fontFamily: 'Inter_500Medium' }]}>Close</Text>
-            </Pressable>
-          </Pressable>
-        </Pressable>
-      </Modal>
-    </View>
-  );
-}
+import { DatePickerField } from '@/components/DatePickerField';
+import { ProductDetailModal } from '@/components/ProductDetailModal';
 
 export default function InventoryScreen() {
   const { colors } = useTheme();
@@ -181,14 +23,15 @@ export default function InventoryScreen() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [editMode, setEditMode] = useState(false);
-  const [editData, setEditData] = useState<Partial<Product>>({});
 
   const [newProduct, setNewProduct] = useState({
     name: '', barcode: '', category: 'Groceries', sellingPrice: '', costPrice: '',
     stock: '', minStock: '', unit: 'pcs', gstRate: '5', manufacturingDate: '', expiryDate: '',
     supplier: '', batchNo: '', section: '',
   });
+
+  const CATEGORIES = ['All', 'Groceries', 'Dairy', 'Household', 'Personal Care', 'Beverages', 'Snacks', 'Frozen Foods'];
+  const STOCK_FILTERS = ['All Stock', 'Low Stock', 'Out of Stock', 'In Stock'];
 
   const productsQuery = useQuery<Product[]>({ queryKey: ['/api/products'] });
   const products = productsQuery.data || [];
@@ -223,43 +66,6 @@ export default function InventoryScreen() {
       if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     },
     onError: (e: any) => Alert.alert('Error', e.message || 'Failed to add product'),
-  });
-
-  const restockMutation = useMutation({
-    mutationFn: async ({ id, qty }: { id: string; qty: number }) => {
-      const res = await apiRequest('POST', `/api/products/${id}/restock`, { qty });
-      return res.json();
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/products'] });
-      if (selectedProduct) setSelectedProduct(data);
-      if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    },
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedProduct) return;
-      const res = await apiRequest('PUT', `/api/products/${selectedProduct.id}`, editData);
-      return res.json();
-    },
-    onSuccess: (data) => {
-      setSelectedProduct(data);
-      setEditMode(false);
-      queryClient.invalidateQueries({ queryKey: ['/api/products'] });
-    },
-    onError: (e: any) => Alert.alert('Error', e.message || 'Failed to update'),
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      await apiRequest('DELETE', `/api/products/${id}`);
-    },
-    onSuccess: () => {
-      setShowDetailModal(false);
-      setSelectedProduct(null);
-      queryClient.invalidateQueries({ queryKey: ['/api/products'] });
-    },
   });
 
   const getExpiryColor = (date: string) => {
@@ -353,7 +159,7 @@ export default function InventoryScreen() {
         scrollEnabled={filtered.length > 0}
         renderItem={({ item: p }) => (
           <Pressable
-            onPress={() => { setSelectedProduct(p); setEditData(p); setShowDetailModal(true); setEditMode(false); }}
+            onPress={() => { setSelectedProduct(p); setShowDetailModal(true); }}
             style={[styles.productRow, { backgroundColor: colors.card, borderColor: colors.border }]}
           >
             <View style={{ flex: 1 }}>
@@ -373,7 +179,9 @@ export default function InventoryScreen() {
 
       <Modal visible={showAddModal} animationType="slide" transparent>
         <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
-          <View style={[styles.formSheet, { backgroundColor: colors.background, paddingBottom: insets.bottom + 16 }]}>
+          <View
+            style={[styles.formSheet, { backgroundColor: colors.background, paddingBottom: insets.bottom + 16 }]}
+          >
             <View style={[styles.formHeader, { borderBottomColor: colors.border }]}>
               <Text style={[styles.formTitle, { color: colors.text, fontFamily: 'Inter_700Bold' }]}>Add New Product</Text>
               <Pressable onPress={() => setShowAddModal(false)}>
@@ -470,235 +278,11 @@ export default function InventoryScreen() {
         </View>
       </Modal>
 
-      <Modal visible={showDetailModal} animationType="slide" transparent>
-        <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
-          <View style={[styles.formSheet, { backgroundColor: colors.background, paddingBottom: insets.bottom + 16 }]}>
-            <View style={[styles.formHeader, { borderBottomColor: colors.border }]}>
-              <Text style={[styles.formTitle, { color: colors.text, fontFamily: 'Inter_700Bold' }]}>Product Details</Text>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <Pressable onPress={() => { if (editMode) updateMutation.mutate(); else setEditMode(true); }}>
-                  <Ionicons name={editMode ? "checkmark" : "create-outline"} size={22} color={colors.tint} />
-                </Pressable>
-                <Pressable onPress={() => {
-                  Alert.alert('Delete', 'Are you sure?', [
-                    { text: 'Cancel', style: 'cancel' },
-                    { text: 'Delete', style: 'destructive', onPress: () => selectedProduct && deleteMutation.mutate(selectedProduct.id) },
-                  ]);
-                }}>
-                  <Ionicons name="trash-outline" size={22} color={colors.danger} />
-                </Pressable>
-                <Pressable onPress={() => { setShowDetailModal(false); setEditMode(false); }}>
-                  <Ionicons name="close" size={24} color={colors.text} />
-                </Pressable>
-              </View>
-            </View>
-            {selectedProduct && (
-              <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
-                {selectedProduct.stock <= selectedProduct.minStock && (
-                  <View style={[styles.warningBanner, { backgroundColor: colors.danger + '10', borderColor: colors.danger + '30' }]}>
-                    <Ionicons name="alert-circle" size={18} color={colors.danger} />
-                    <Text style={[styles.warningText, { color: colors.danger, fontFamily: 'Inter_500Medium' }]}>Low stock! Below minimum ({selectedProduct.minStock})</Text>
-                  </View>
-                )}
-                <View style={[styles.detailCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <Text style={[styles.detailName, { color: colors.text, fontFamily: 'Inter_700Bold' }]}>{selectedProduct.name}</Text>
-                  <Text style={[styles.detailSku, { color: colors.textMuted, fontFamily: 'Inter_400Regular' }]}>{selectedProduct.sku} | {selectedProduct.category}</Text>
-                  <View style={styles.detailStatsRow}>
-                    <View style={[styles.detailStatBox, { backgroundColor: colors.background }]}>
-                      <Text style={[styles.detailStatValue, { color: colors.tint, fontFamily: 'Inter_700Bold' }]}>Rs.{selectedProduct.sellingPrice}</Text>
-                      <Text style={[styles.detailStatLabel, { color: colors.textMuted, fontFamily: 'Inter_400Regular' }]}>Price</Text>
-                    </View>
-                    <View style={[styles.detailStatBox, { backgroundColor: getStockColor(selectedProduct) + '10' }]}>
-                      <Text style={[styles.detailStatValue, { color: getStockColor(selectedProduct), fontFamily: 'Inter_700Bold' }]}>{selectedProduct.stock}</Text>
-                      <Text style={[styles.detailStatLabel, { color: colors.textMuted, fontFamily: 'Inter_400Regular' }]}>Stock</Text>
-                    </View>
-                    <View style={[styles.detailStatBox, { backgroundColor: colors.background }]}>
-                      <Text style={[styles.detailStatValue, { color: colors.text, fontFamily: 'Inter_700Bold' }]}>{selectedProduct.gstRate}%</Text>
-                      <Text style={[styles.detailStatLabel, { color: colors.textMuted, fontFamily: 'Inter_400Regular' }]}>GST</Text>
-                    </View>
-                  </View>
-                </View>
-
-                <View style={[styles.detailCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <Text style={[styles.detailSectionTitle, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>Quick Restock</Text>
-                  <View style={styles.restockRow}>
-                    {[10, 25, 50, 100].map(qty => (
-                      <Pressable key={qty} onPress={() => restockMutation.mutate({ id: selectedProduct.id, qty })}
-                        style={[styles.restockBtn, { borderColor: colors.tint + '40' }]}>
-                        <Text style={[styles.restockBtnText, { color: colors.tint, fontFamily: 'Inter_600SemiBold' }]}>+{qty}</Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                </View>
-
-                {editMode ? (
-                  <View style={[styles.editFormContainer, { backgroundColor: colors.card }]}>
-                    <Text style={[styles.detailSectionTitle, { color: colors.text, fontFamily: 'Inter_600SemiBold', marginBottom: 16 }]}>Edit Product</Text>
-
-                    <View style={styles.formField}>
-                      <Text style={[styles.editLabel, { color: colors.textSecondary }]}>Product Name</Text>
-                      <TextInput
-                        style={[styles.editBoxInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.inputBg }]}
-                        value={String(editData.name || '')}
-                        onChangeText={v => setEditData(p => ({ ...p, name: v }))}
-                      />
-                    </View>
-
-                    <View style={styles.formRow}>
-                      <View style={[styles.formField, { flex: 1 }]}>
-                        <Text style={[styles.editLabel, { color: colors.textSecondary }]}>Barcode</Text>
-                        <TextInput
-                          style={[styles.editBoxInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.inputBg }]}
-                          value={String(editData.barcode || '')}
-                          onChangeText={v => setEditData(p => ({ ...p, barcode: v }))}
-                        />
-                      </View>
-                      <View style={[styles.formField, { flex: 1 }]}>
-                        <Text style={[styles.editLabel, { color: colors.textSecondary }]}>Category</Text>
-                        <TextInput
-                          style={[styles.editBoxInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.inputBg }]}
-                          value={String(editData.category || '')}
-                          onChangeText={v => setEditData(p => ({ ...p, category: v }))}
-                        />
-                        {/* Note: ideally a dropdown, but text input works for flexibility for now */}
-                      </View>
-                    </View>
-
-                    <View style={styles.formRow}>
-                      <View style={[styles.formField, { flex: 1 }]}>
-                        <Text style={[styles.editLabel, { color: colors.textSecondary }]}>Selling Price (₹)</Text>
-                        <TextInput
-                          style={[styles.editBoxInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.inputBg }]}
-                          value={String(editData.sellingPrice ?? '')}
-                          onChangeText={v => setEditData(p => ({ ...p, sellingPrice: Number(v) }))}
-                          keyboardType="numeric"
-                        />
-                      </View>
-                      <View style={[styles.formField, { flex: 1 }]}>
-                        <Text style={[styles.editLabel, { color: colors.textSecondary }]}>Cost Price (₹)</Text>
-                        <TextInput
-                          style={[styles.editBoxInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.inputBg }]}
-                          value={String(editData.costPrice ?? '')}
-                          onChangeText={v => setEditData(p => ({ ...p, costPrice: Number(v) }))}
-                          keyboardType="numeric"
-                        />
-                      </View>
-                    </View>
-
-                    <View style={styles.formRow}>
-                      <View style={[styles.formField, { flex: 1 }]}>
-                        <Text style={[styles.editLabel, { color: colors.textSecondary }]}>Stock Quantity</Text>
-                        <TextInput
-                          style={[styles.editBoxInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.inputBg }]}
-                          value={String(editData.stock ?? '')}
-                          onChangeText={v => setEditData(p => ({ ...p, stock: Number(v) }))}
-                          keyboardType="numeric"
-                        />
-                      </View>
-                      <View style={[styles.formField, { flex: 1 }]}>
-                        <Text style={[styles.editLabel, { color: colors.textSecondary }]}>Min Stock (Alert)</Text>
-                        <TextInput
-                          style={[styles.editBoxInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.inputBg }]}
-                          value={String(editData.minStock ?? '')}
-                          onChangeText={v => setEditData(p => ({ ...p, minStock: Number(v) }))}
-                          keyboardType="numeric"
-                        />
-                      </View>
-                    </View>
-
-                    <View style={styles.formRow}>
-                      <View style={[styles.formField, { flex: 1 }]}>
-                        <Text style={[styles.editLabel, { color: colors.textSecondary }]}>Unit</Text>
-                        <TextInput
-                          style={[styles.editBoxInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.inputBg }]}
-                          value={String(editData.unit || '')}
-                          onChangeText={v => setEditData(p => ({ ...p, unit: v }))}
-                        />
-                      </View>
-                      <View style={[styles.formField, { flex: 1 }]}>
-                        <Text style={[styles.editLabel, { color: colors.textSecondary }]}>GST Rate (%)</Text>
-                        <TextInput
-                          style={[styles.editBoxInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.inputBg }]}
-                          value={String(editData.gstRate ?? '')}
-                          onChangeText={v => setEditData(p => ({ ...p, gstRate: Number(v) }))}
-                          keyboardType="numeric"
-                        />
-                      </View>
-                    </View>
-
-                    <View style={styles.formRow}>
-                      <View style={[styles.formField, { flex: 1 }]}>
-                        <Text style={[styles.editLabel, { color: colors.textSecondary }]}>Manufacturing Date</Text>
-                        <DatePickerField
-                          label="Manufacturing Date"
-                          value={String(editData.manufacturingDate || '')}
-                          onChange={v => setEditData(p => ({ ...p, manufacturingDate: v }))}
-                          colors={colors}
-                        />
-                      </View>
-                      <View style={[styles.formField, { flex: 1 }]}>
-                        <Text style={[styles.editLabel, { color: colors.textSecondary }]}>Expiry Date</Text>
-                        <DatePickerField
-                          label="Expiry Date"
-                          value={String(editData.expiryDate || '')}
-                          onChange={v => setEditData(p => ({ ...p, expiryDate: v }))}
-                          colors={colors}
-                        />
-                      </View>
-                    </View>
-
-                    <View style={styles.formRow}>
-                      <View style={[styles.formField, { flex: 1 }]}>
-                        <Text style={[styles.editLabel, { color: colors.textSecondary }]}>Supplier</Text>
-                        <TextInput
-                          style={[styles.editBoxInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.inputBg }]}
-                          value={String(editData.supplier || '')}
-                          onChangeText={v => setEditData(p => ({ ...p, supplier: v }))}
-                        />
-                      </View>
-                      <View style={[styles.formField, { flex: 1 }]}>
-                        <Text style={[styles.editLabel, { color: colors.textSecondary }]}>Batch No.</Text>
-                        <TextInput
-                          style={[styles.editBoxInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.inputBg }]}
-                          value={String(editData.batchNo || '')}
-                          onChangeText={v => setEditData(p => ({ ...p, batchNo: v }))}
-                        />
-                      </View>
-                    </View>
-
-                    <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
-                      <Pressable onPress={() => setEditMode(false)} style={[styles.actionBtn, { borderColor: colors.border, flex: 1 }]}>
-                        <Text style={[styles.actionBtnText, { color: colors.text }]}>Cancel</Text>
-                      </Pressable>
-                      <Pressable onPress={() => updateMutation.mutate()} style={[styles.actionBtn, { backgroundColor: '#2563eb', flex: 1, borderColor: '#2563eb' }]}>
-                        <Ionicons name="save-outline" size={18} color="#fff" />
-                        <Text style={[styles.actionBtnText, { color: '#fff', fontWeight: '600' }]}>Update Product</Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                ) : (
-                  <View style={[styles.detailCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <Text style={[styles.detailSectionTitle, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>Details</Text>
-                    {[
-                      { label: 'Cost Price', value: `Rs.${selectedProduct.costPrice}` },
-                      { label: 'Min Stock Level', value: String(selectedProduct.minStock) },
-                      { label: 'GST Rate', value: `${selectedProduct.gstRate}%` },
-                      { label: 'Section', value: selectedProduct.section || '-' },
-                      { label: 'Expiry Date', value: selectedProduct.expiryDate ? new Date(selectedProduct.expiryDate).toLocaleDateString('en-IN') : '-' },
-                      { label: 'Last Updated', value: selectedProduct.lastUpdated },
-                    ].map(d => (
-                      <View key={d.label} style={styles.detailRow}>
-                        <Text style={[styles.detailRowLabel, { color: colors.textMuted, fontFamily: 'Inter_400Regular' }]}>{d.label}</Text>
-                        <Text style={[styles.detailRowValue, { color: colors.text, fontFamily: 'Inter_500Medium' }]}>{d.value}</Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
-              </ScrollView>
-            )}
-          </View>
-        </View>
-      </Modal>
+      <ProductDetailModal
+        visible={showDetailModal}
+        onClose={() => setShowDetailModal(false)}
+        product={selectedProduct}
+      />
     </View>
   );
 }
@@ -741,81 +325,4 @@ const styles = StyleSheet.create({
   catSelectText: { fontSize: 12 },
   submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 48, borderRadius: 12, gap: 8, marginTop: 16 },
   submitBtnText: { fontSize: 15, color: '#fff' },
-  warningBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 14, borderRadius: 12, borderWidth: 1, marginBottom: 12 },
-  warningText: { fontSize: 13, flex: 1 },
-  detailCard: { borderRadius: 14, padding: 16, borderWidth: 1, marginBottom: 12 },
-  detailName: { fontSize: 18 },
-  detailSku: { fontSize: 12, marginTop: 2, marginBottom: 12 },
-  detailStatsRow: { flexDirection: 'row', gap: 10 },
-  detailStatBox: { flex: 1, padding: 12, borderRadius: 10, alignItems: 'center' },
-  detailStatValue: { fontSize: 18 },
-  detailStatLabel: { fontSize: 11, marginTop: 2 },
-  detailSectionTitle: { fontSize: 15, marginBottom: 12 },
-  restockRow: { flexDirection: 'row', gap: 10 },
-  restockBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, borderWidth: 1, alignItems: 'center' },
-  restockBtnText: { fontSize: 15 },
-  detailRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: '#33415530' },
-  detailRowLabel: { fontSize: 13 },
-  detailRowValue: { fontSize: 13 },
-  editField: { marginBottom: 12 },
-  editLabel: { fontSize: 11, marginBottom: 4 },
-  editInput: { borderBottomWidth: 1, paddingVertical: 8, fontSize: 14 },
-  editFormContainer: { borderRadius: 14, padding: 16, marginBottom: 12, borderWidth: 1 },
-  editBoxInput: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, height: 40, fontSize: 13 },
-  actionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 44, borderRadius: 10, borderWidth: 1, gap: 8 },
-  actionBtnText: { fontSize: 14, fontFamily: 'Inter_500Medium' },
-});
-
-// ── Calendar Picker Styles ──────────────────────────────────────────────────
-const calStyles = StyleSheet.create({
-  dateBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, height: 40,
-  },
-  dateBtnText: { flex: 1, fontSize: 13, fontFamily: 'Inter_400Regular' },
-  calOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'center', alignItems: 'center', padding: 20,
-  },
-  calCard: {
-    width: '100%', maxWidth: 340,
-    borderRadius: 20, borderWidth: 1,
-    overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.25, shadowRadius: 20, elevation: 16,
-  },
-  calHeader: {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 16,
-  },
-  calNavBtn: {
-    width: 34, height: 34, borderRadius: 10,
-    alignItems: 'center', justifyContent: 'center',
-    backgroundColor: 'rgba(128,128,128,0.12)',
-  },
-  calMonthLabel: { fontSize: 16 },
-  calDayRow: {
-    flexDirection: 'row', paddingHorizontal: 12, marginBottom: 4,
-  },
-  calDayLabel: {
-    flex: 1, textAlign: 'center', fontSize: 11, paddingVertical: 4,
-  },
-  calGrid: {
-    flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 12, marginBottom: 8,
-  },
-  calCell: {
-    width: `${100 / 7}%`, aspectRatio: 1,
-    alignItems: 'center', justifyContent: 'center', padding: 2,
-  },
-  calDayBtn: {
-    width: '100%', height: '100%',
-    alignItems: 'center', justifyContent: 'center',
-    borderRadius: 100,
-  },
-  calDayText: { fontSize: 13 },
-  calCloseBtn: {
-    borderTopWidth: 1, paddingVertical: 14,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  calCloseBtnText: { fontSize: 14 },
 });

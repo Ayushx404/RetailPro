@@ -477,8 +477,12 @@ class FirebaseStorage implements IStorage {
   }
 
   async getTransactions(): Promise<Transaction[]> {
-    const snap = await this.db.collection('transactions').orderBy('createdAt', 'desc').get();
-    return snap.docs.map(d => this.docToObj<Transaction>(d));
+    const snap = await this.db.collection('transactions').get();
+    return snap.docs.map(d => this.docToObj<Transaction>(d)).sort((a, b) => {
+      const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return db - da;
+    });
   }
   async getTransaction(id: string): Promise<Transaction | undefined> {
     const doc = await this.db.collection('transactions').doc(id).get();

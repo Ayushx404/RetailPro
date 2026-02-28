@@ -4,12 +4,14 @@ import {
   Animated, RefreshControl, Dimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons, Feather } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useQuery } from '@tanstack/react-query';
 import { useTheme } from '@/lib/theme-context';
 import { useAuth } from '@/lib/auth-context';
 import { router } from 'expo-router';
-import type { DashboardStats, ActivityLog } from '@/lib/types';
+import type { DashboardStats, ActivityLog, Product } from '@/lib/types';
+import { ProductDetailModal } from '@/components/ProductDetailModal';
+import { apiRequest } from '@/lib/query-client';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -59,6 +61,20 @@ export default function DashboardScreen() {
 
   const stats = statsQuery.data;
   const logs = logsQuery.data;
+
+  const [showDetailModal, setShowDetailModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+
+  const onProductClick = async (id: string) => {
+    try {
+      const res = await apiRequest('GET', `/api/products/${id}`);
+      const product = await res.json();
+      setSelectedProduct(product);
+      setShowDetailModal(true);
+    } catch (e) {
+      console.error('Failed to fetch product', e);
+    }
+  };
 
   const onRefresh = () => {
     statsQuery.refetch();
@@ -114,37 +130,37 @@ export default function DashboardScreen() {
                 <View style={[styles.statIcon, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
                   <MaterialCommunityIcons name="currency-inr" size={20} color="#fff" />
                 </View>
-                <Text style={[styles.statValue, { fontFamily: 'Inter_700Bold' }]}>
+                <Text style={[styles.statValue, { color: '#fff', fontFamily: 'Inter_700Bold' }]}>
                   <NumberTicker value={Math.round(stats.totalRevenue)} prefix="Rs. " />
                 </Text>
-                <Text style={[styles.statLabel, { fontFamily: 'Inter_400Regular' }]}>Total Revenue</Text>
+                <Text style={[styles.statLabel, { color: 'rgba(255,255,255,0.8)', fontFamily: 'Inter_400Regular' }]}>Total Revenue</Text>
               </View>
               <View style={[styles.statCard, { backgroundColor: '#16a34a' }]}>
                 <View style={[styles.statIcon, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
                   <Ionicons name="trending-up" size={20} color="#fff" />
                 </View>
-                <Text style={[styles.statValue, { fontFamily: 'Inter_700Bold' }]}>
+                <Text style={[styles.statValue, { color: '#fff', fontFamily: 'Inter_700Bold' }]}>
                   <NumberTicker value={Math.round(stats.netProfit)} prefix="Rs. " />
                 </Text>
-                <Text style={[styles.statLabel, { fontFamily: 'Inter_400Regular' }]}>Net Profit</Text>
+                <Text style={[styles.statLabel, { color: 'rgba(255,255,255,0.8)', fontFamily: 'Inter_400Regular' }]}>Net Profit</Text>
               </View>
               <View style={[styles.statCard, { backgroundColor: '#f59e0b' }]}>
                 <View style={[styles.statIcon, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
                   <Ionicons name="receipt-outline" size={20} color="#fff" />
                 </View>
-                <Text style={[styles.statValue, { fontFamily: 'Inter_700Bold' }]}>
+                <Text style={[styles.statValue, { color: '#fff', fontFamily: 'Inter_700Bold' }]}>
                   <NumberTicker value={stats.totalTransactions} />
                 </Text>
-                <Text style={[styles.statLabel, { fontFamily: 'Inter_400Regular' }]}>Transactions</Text>
+                <Text style={[styles.statLabel, { color: 'rgba(255,255,255,0.8)', fontFamily: 'Inter_400Regular' }]}>Transactions</Text>
               </View>
               <View style={[styles.statCard, { backgroundColor: '#8b5cf6' }]}>
                 <View style={[styles.statIcon, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
                   <Ionicons name="people-outline" size={20} color="#fff" />
                 </View>
-                <Text style={[styles.statValue, { fontFamily: 'Inter_700Bold' }]}>
+                <Text style={[styles.statValue, { color: '#fff', fontFamily: 'Inter_700Bold' }]}>
                   <NumberTicker value={stats.activeEmployees} />
                 </Text>
-                <Text style={[styles.statLabel, { fontFamily: 'Inter_400Regular' }]}>Active Staff</Text>
+                <Text style={[styles.statLabel, { color: 'rgba(255,255,255,0.8)', fontFamily: 'Inter_400Regular' }]}>Active Staff</Text>
               </View>
             </ScrollView>
 
@@ -174,7 +190,6 @@ export default function DashboardScreen() {
               <View style={styles.sectionHeader}>
                 <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>Sales by Category</Text>
               </View>
-              {/* Added flexible wrapping container for safer layout */}
               <View style={styles.categoryGrid}>
                 {Object.entries(stats.categoryRevenue).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([cat, rev], i) => {
                   const catColors = ['#2563eb', '#16a34a', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4'];
@@ -200,7 +215,6 @@ export default function DashboardScreen() {
               <View style={styles.paymentRow}>
                 {Object.entries(stats.paymentMethods).map(([method, data]) => {
                   const pmColors: Record<string, string> = { Cash: '#16a34a', Card: '#2563eb', UPI: '#8b5cf6' };
-                  // Cap bar height so count label + bar + label all fit in the container
                   const barHeight = Math.min(Math.max(data.count * 6, 16), 70);
                   return (
                     <View key={method} style={styles.paymentItem}>
@@ -223,7 +237,14 @@ export default function DashboardScreen() {
                   </View>
                 </View>
                 {stats.lowStockProducts.map(p => (
-                  <View key={p.id} style={[styles.alertRow, { borderColor: colors.border }]}>
+                  <Pressable
+                    key={p.id}
+                    onPress={() => onProductClick(p.id)}
+                    style={({ pressed }) => [
+                      styles.alertRow,
+                      { borderColor: colors.border, borderBottomWidth: 0.5, opacity: pressed ? 0.7 : 1 }
+                    ]}
+                  >
                     <View style={[styles.alertIcon, { backgroundColor: colors.danger + '15' }]}>
                       <MaterialCommunityIcons name="package-variant" size={18} color={colors.danger} />
                     </View>
@@ -231,7 +252,7 @@ export default function DashboardScreen() {
                     <View style={[styles.stockBadge, { backgroundColor: colors.danger + '15' }]}>
                       <Text style={[styles.stockBadgeText, { color: colors.danger, fontFamily: 'Inter_600SemiBold' }]}>{p.stock}</Text>
                     </View>
-                  </View>
+                  </Pressable>
                 ))}
               </View>
             )}
@@ -246,7 +267,14 @@ export default function DashboardScreen() {
                   </View>
                 </View>
                 {stats.expiringProducts.map(p => (
-                  <View key={p.id} style={[styles.alertRow, { borderColor: colors.border }]}>
+                  <Pressable
+                    key={p.id}
+                    onPress={() => onProductClick(p.id)}
+                    style={({ pressed }) => [
+                      styles.alertRow,
+                      { borderColor: colors.border, borderBottomWidth: 0.5, opacity: pressed ? 0.7 : 1 }
+                    ]}
+                  >
                     <View style={[styles.alertIcon, { backgroundColor: getExpiryColor(p.daysLeft) + '15' }]}>
                       <Ionicons name="time" size={18} color={getExpiryColor(p.daysLeft)} />
                     </View>
@@ -255,16 +283,14 @@ export default function DashboardScreen() {
                       <Text style={[styles.alertSub, { color: colors.textMuted, fontFamily: 'Inter_400Regular' }]}>Expires: {new Date(p.expiryDate).toLocaleDateString('en-IN')}</Text>
                     </View>
                     <Text style={[styles.daysLeft, { color: getExpiryColor(p.daysLeft), fontFamily: 'Inter_600SemiBold' }]}>{p.daysLeft}d</Text>
-                  </View>
+                  </Pressable>
                 ))}
-                {stats.expiringProducts.length > 0 && (
-                  <View style={[styles.potentialLossCard, { backgroundColor: colors.danger + '10', borderColor: colors.danger + '30' }]}>
-                    <Ionicons name="alert-circle" size={16} color={colors.danger} />
-                    <Text style={[styles.potentialLossText, { color: colors.danger, fontFamily: 'Inter_500Medium' }]}>
-                      Potential Loss: Rs.{stats.expiringProducts.reduce((s, p) => s + p.potentialLoss, 0).toLocaleString()}
-                    </Text>
-                  </View>
-                )}
+                <View style={[styles.potentialLossCard, { backgroundColor: colors.danger + '10', borderColor: colors.danger + '30' }]}>
+                  <Ionicons name="alert-circle" size={16} color={colors.danger} />
+                  <Text style={[styles.potentialLossText, { color: colors.danger, fontFamily: 'Inter_500Medium' }]}>
+                    Potential Loss: Rs.{stats.expiringProducts.reduce((s, p) => s + p.potentialLoss, 0).toLocaleString()}
+                  </Text>
+                </View>
               </View>
             )}
           </>
@@ -277,7 +303,7 @@ export default function DashboardScreen() {
               <Text style={[styles.sectionTitle, { color: colors.text, fontFamily: 'Inter_600SemiBold' }]}>Activity Feed</Text>
             </View>
             {logs.slice(0, 8).map((log, i) => (
-              <View key={log.id} style={[styles.logRow, i < 7 && { borderBottomWidth: 1, borderBottomColor: colors.border + '50' }]}>
+              <View key={log.id} style={[styles.logRow, i < logs.slice(0, 8).length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border + '50' }]}>
                 <Text style={[styles.logTime, { color: colors.textMuted, fontFamily: 'Inter_400Regular' }]}>{formatTime(log.timestamp)}</Text>
                 <View style={[styles.rolePill, { backgroundColor: getRoleBadgeColor(log.userRole) + '20' }]}>
                   <Text style={[styles.rolePillText, { color: getRoleBadgeColor(log.userRole), fontFamily: 'Inter_600SemiBold' }]}>{log.userRole.replace('_', ' ')}</Text>
@@ -291,6 +317,12 @@ export default function DashboardScreen() {
           </View>
         )}
       </ScrollView>
+
+      <ProductDetailModal
+        visible={showDetailModal}
+        onClose={() => setShowDetailModal(false)}
+        product={selectedProduct}
+      />
     </View>
   );
 }
@@ -305,8 +337,8 @@ const styles = StyleSheet.create({
   statsRow: { paddingHorizontal: 20, gap: 12, marginBottom: 16 },
   statCard: { width: Math.min(150, SCREEN_WIDTH * 0.38), borderRadius: 16, padding: 14 },
   statIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  statValue: { fontSize: 18, color: '#fff' },
-  statLabel: { fontSize: 11, color: 'rgba(255,255,255,0.8)', marginTop: 4 },
+  statValue: { fontSize: 18 },
+  statLabel: { fontSize: 11, marginTop: 4 },
   sectionCard: { marginHorizontal: 16, borderRadius: 16, padding: 14, marginBottom: 16, borderWidth: 1, overflow: 'hidden' },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
   sectionTitle: { fontSize: 15, flex: 1 },
@@ -317,7 +349,6 @@ const styles = StyleSheet.create({
   barLabel: { fontSize: 10, marginTop: 6 },
   categoryGrid: { gap: 10 },
   categoryRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  categoryItem: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   categoryDot: { width: 10, height: 10, borderRadius: 5 },
   categoryName: { fontSize: 13, flex: 1 },
   categoryValue: { fontSize: 12, flexShrink: 1 },
@@ -326,7 +357,7 @@ const styles = StyleSheet.create({
   paymentCount: { fontSize: 15 },
   paymentBar: { width: Math.min(44, SCREEN_WIDTH * 0.1), borderRadius: 8 },
   paymentLabel: { fontSize: 12 },
-  alertRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: 0.5 },
+  alertRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
   alertIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   alertName: { fontSize: 14, flex: 1 },
   alertSub: { fontSize: 11, marginTop: 2 },

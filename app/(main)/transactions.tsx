@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import {
-    View, Text, StyleSheet, FlatList, TextInput, RefreshControl,
+    View, Text, StyleSheet, SectionList, TextInput, RefreshControl,
     Platform, Pressable, Modal, ScrollView, TouchableOpacity
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,24 +14,58 @@ export default function TransactionsScreen() {
     const insets = useSafeAreaInsets();
     const [search, setSearch] = useState('');
     const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
+    const [filter, setFilter] = useState<'today' | '7days' | '30days' | 'all'>('all');
 
     const { data: transactions, refetch, isRefetching } = useQuery<Transaction[]>({
-        queryKey: ['/api/transactions']
+        queryKey: [`/api/transactions${filter !== 'all' ? `?filter=${filter}` : ''}`]
     });
 
     const filtered = useMemo(() => {
         if (!transactions) return [];
-        let res = [...transactions].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+        // 1. Sort by date descending (Newest first)
+        let sortedItems = [...transactions].sort((a, b) => {
+            const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return db - da;
+        });
+
+        // 2. Apply Search
         if (search) {
             const q = search.toLowerCase();
-            res = res.filter(t =>
+            sortedItems = sortedItems.filter(t =>
                 t.invoiceNo.toLowerCase().includes(q) ||
-                t.customerPhone?.includes(q) ||
-                t.cashierName?.toLowerCase().includes(q)
+                (t.customerPhone && t.customerPhone.toLowerCase().includes(q)) ||
+                (t.cashierName && t.cashierName.toLowerCase().includes(q))
             );
         }
-        return res;
-    }, [transactions, search]);
+
+        // 3. Group by Date for SectionList
+        const sections: { title: string, data: Transaction[] }[] = [];
+        sortedItems.forEach(t => {
+            let dateStr = "Unknown Date";
+            if (t.createdAt) {
+                const d = new Date(t.createdAt);
+                if (!isNaN(d.getTime())) {
+                    // Manual formatting for cross-platform consistency
+                    const day = d.getDate();
+                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    const month = months[d.getMonth()];
+                    const year = d.getFullYear();
+                    dateStr = `${day} ${month} ${year}`;
+                }
+            }
+
+            const existing = sections.find(s => s.title === dateStr);
+            if (existing) {
+                existing.data.push(t);
+            } else {
+                sections.push({ title: dateStr, data: [t] });
+            }
+        });
+
+        return sections;
+    }, [transactions, search, filter]);
 
     const getPaymentIcon = (method: string) => {
         switch (method) {
@@ -138,14 +172,45 @@ export default function TransactionsScreen() {
                 )}
             </View>
 
-            <FlatList
-                data={filtered}
+            <View style={styles.filterContainer}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingHorizontal: 20 }}>
+                    {(['today', '7days', '30days', 'all'] as const).map(f => {
+                        const isSelected = filter === f;
+                        return (
+                            <Pressable
+                                key={f}
+                                onPress={() => setFilter(f)}
+                                style={[
+                                    styles.filterChip,
+                                    { backgroundColor: isSelected ? colors.tint : colors.card, borderColor: isSelected ? colors.tint : colors.border }
+                                ]}
+                            >
+                                <Text style={[
+                                    styles.filterChipText,
+                                    { color: isSelected ? '#fff' : colors.textSecondary }
+                                ]}>
+                                    {f === 'today' ? 'Today' : f === '7days' ? '7 Days' : f === '30days' ? '30 Days' : 'All Time'}
+                                </Text>
+                            </Pressable>
+                        )
+                    })}
+                </ScrollView>
+            </View>
+
+            <SectionList
+                sections={filtered}
                 renderItem={renderItem}
+                renderSectionHeader={({ section: { title } }) => (
+                    <View style={[styles.sectionHeader, { backgroundColor: colors.background }]}>
+                        <Text style={[styles.sectionHeaderText, { color: colors.text }]}>{title}</Text>
+                    </View>
+                )}
                 keyExtractor={item => item.id}
                 contentContainerStyle={styles.list}
                 refreshControl={
                     <RefreshControl refreshing={isRefetching} onRefresh={refetch} tintColor={colors.tint} />
                 }
+                stickySectionHeadersEnabled={false}
                 ListEmptyComponent={
                     <View style={styles.empty}>
                         <Ionicons name="receipt-outline" size={48} color={colors.textMuted} />
@@ -295,7 +360,12 @@ const styles = StyleSheet.create({
         borderRadius: 12, borderWidth: 1, gap: 8
     },
     input: { flex: 1, height: '100%', fontFamily: 'Inter_400Regular', fontSize: 14 },
+    filterContainer: { marginBottom: 16 },
+    filterChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+    filterChipText: { fontSize: 13, fontFamily: 'Inter_500Medium' },
     list: { padding: 20, paddingTop: 0, paddingBottom: 100 },
+    sectionHeader: { paddingVertical: 8, marginBottom: 8 },
+    sectionHeaderText: { fontSize: 15, fontFamily: 'Inter_700Bold' },
 
     // Card
     card: { borderRadius: 16, marginBottom: 12, borderWidth: 1, overflow: 'hidden' },
